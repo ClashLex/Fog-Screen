@@ -3,16 +3,26 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Breath Mirror</title>
+<title>Fog Screen — Breath Mirror</title>
+<meta name="description" content="An interactive breath-powered fog mirror. Blow to fog the screen, pinch to draw, and capture your art with hand gestures.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500&display=swap" rel="stylesheet">
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { background: #000; overflow: hidden; width: 100vw; height: 100vh; cursor: none; }
+
+  body {
+    background: #000; overflow: hidden;
+    width: 100vw; height: 100vh; cursor: none;
+    font-family: 'Cormorant Garamond', Georgia, serif;
+  }
+
   #container { position: relative; width: 100vw; height: 100vh; }
 
   video {
     position: absolute; width: 100%; height: 100%;
     object-fit: cover; transform: scaleX(-1); opacity: 0; pointer-events: none;
   }
+
   canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
   #cameraCanvas { z-index: 1; }
   #maskCanvas   { z-index: 0; display: none; }
@@ -20,27 +30,28 @@
   #inkCanvas    { z-index: 3; pointer-events: none; }
   #frameCanvas  { z-index: 4; pointer-events: none; }
 
-  /* ── Grain ── */
+  /* ── Film grain overlay ── */
   .grain {
-    position: fixed; inset: 0; pointer-events: none; z-index: 90; opacity: 0.15;
+    position: fixed; inset: 0; pointer-events: none; z-index: 90; opacity: 0.12;
     background: url('data:image/svg+xml;utf8,%3Csvg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg"%3E%3Cfilter id="n"%3E%3CfeTurbulence type="fractalNoise" baseFrequency="1.3" numOctaves="4" stitchTiles="stitch"/%3E%3C/filter%3E%3Crect width="100%25" height="100%25" filter="url(%23n)"/%3E%3C/svg%3E');
     mix-blend-mode: overlay;
   }
 
-  /* ── Vignette ── */
+  /* ── Cinematic vignette ── */
   .vignette {
     position: fixed; inset: 0; pointer-events: none; z-index: 80;
-    background: radial-gradient(ellipse at center, transparent 52%, rgba(0,0,0,0.6) 100%);
+    background: radial-gradient(ellipse at center, transparent 50%, rgba(0,0,0,0.65) 100%);
   }
 
-  /* ── Cursor — size set by JS ── */
+  /* ── Custom cursor — size driven by JS ── */
   #cursor {
     position: fixed; border-radius: 50%;
     border: 1.5px solid rgba(255,255,255,0.55);
     background: rgba(255,255,255,0.05);
     pointer-events: none; z-index: 100;
     transform: translate(-50%, -50%);
-    opacity: 0; transition: opacity 0.12s, width 0.08s, height 0.08s, background 0.08s, border-color 0.08s;
+    opacity: 0;
+    transition: opacity 0.12s, width 0.08s, height 0.08s, background 0.08s, border-color 0.08s;
   }
   #cursor.erasing  { background: rgba(255,255,255,0.82); border-color: #fff; }
   #cursor.ink-idle { border-color: rgba(200,130,80,0.7); background: rgba(200,130,80,0.08); }
@@ -57,35 +68,37 @@
   }
   #breathRing.active {
     border-color: rgba(210,225,215,0.82);
-    box-shadow: 0 0 16px rgba(210,225,215,0.28);
+    box-shadow: 0 0 18px rgba(210,225,215,0.3);
   }
 
-  /* ── Status ── */
+  /* ── Status text ── */
   #status {
     position: fixed; bottom: 170px; left: 50%; transform: translateX(-50%);
     color: rgba(255,255,255,0.36); font-size: 10.5px; letter-spacing: 0.22em;
-    text-transform: uppercase; font-family: Georgia, serif;
+    text-transform: uppercase; font-family: 'Cormorant Garamond', Georgia, serif;
     pointer-events: none; white-space: nowrap; z-index: 50; transition: opacity 0.3s;
   }
 
-  /* ── Mode indicator (top left) ── */
+  /* ── Mode HUD (top left) ── */
   #modeHud {
     position: fixed; top: 20px; left: 20px; z-index: 50; pointer-events: none;
     color: rgba(255,255,255,0.28); font-size: 10px;
-    letter-spacing: 0.2em; text-transform: uppercase; font-family: Georgia, serif;
+    letter-spacing: 0.2em; text-transform: uppercase;
+    font-family: 'Cormorant Garamond', Georgia, serif;
   }
   #modeHud em { color: rgba(255,255,255,0.65); font-style: normal; }
 
-  /* ── Countdown ── */
+  /* ── Countdown overlay ── */
   #countdown {
     position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
-    font-size: 140px; font-family: Georgia, serif;
+    font-size: 140px; font-family: 'Cormorant Garamond', Georgia, serif;
     color: rgba(255,255,255,0.9); text-shadow: 0 0 40px rgba(255,255,255,0.35);
     pointer-events: none; z-index: 60; opacity: 0; transition: opacity 0.2s;
+    font-weight: 300;
   }
   #countdown.show { opacity: 1; }
 
-  /* ── Buttons (top right) ── */
+  /* ── Control buttons (top right) ── */
   #btnGroup {
     position: fixed; top: 18px; right: 18px; z-index: 200;
     display: flex; flex-direction: column; gap: 7px; align-items: flex-end;
@@ -95,8 +108,8 @@
     background: rgba(0,0,0,0.45); border: 1px solid rgba(255,255,255,0.28);
     color: rgba(255,255,255,0.82); padding: 7px 14px; font-size: 10px;
     letter-spacing: 0.11em; text-transform: uppercase; cursor: pointer;
-    border-radius: 3px; font-family: Georgia, serif; transition: all 0.12s;
-    backdrop-filter: blur(6px); white-space: nowrap;
+    border-radius: 3px; font-family: 'Cormorant Garamond', Georgia, serif;
+    transition: all 0.12s; backdrop-filter: blur(6px); white-space: nowrap;
   }
   #btnGroup button:hover  { background: rgba(255,255,255,0.16); }
   #btnGroup button:active { transform: scale(0.95); }
@@ -122,17 +135,86 @@
   .save-btn {
     position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
     background: rgba(0,0,0,0.5); color: white; font-size: 9.5px;
-    letter-spacing: 0.1em; font-family: Georgia, serif; text-transform: uppercase;
-    opacity: 0; transition: opacity 0.15s;
+    letter-spacing: 0.1em; font-family: 'Cormorant Garamond', Georgia, serif;
+    text-transform: uppercase; opacity: 0; transition: opacity 0.15s;
   }
   .photo-thumb:hover .save-btn { opacity: 1; }
-  @keyframes thumbIn { from { opacity:0; transform:scale(0.8) translateY(8px); } to { opacity:1; transform:scale(1); } }
+  @keyframes thumbIn {
+    from { opacity: 0; transform: scale(0.8) translateY(8px); }
+    to   { opacity: 1; transform: scale(1); }
+  }
 
   /* ── Flash ── */
-  #flash { position: fixed; inset: 0; z-index: 500; background: white; opacity: 0; pointer-events: none; }
+  #flash {
+    position: fixed; inset: 0; z-index: 500;
+    background: white; opacity: 0; pointer-events: none;
+  }
+
+  /* ── Welcome overlay ── */
+  #welcome {
+    position: fixed; inset: 0; z-index: 999;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    background: rgba(0,0,0,0.88); backdrop-filter: blur(20px);
+    opacity: 1; transition: opacity 0.6s ease;
+  }
+  #welcome.hidden { opacity: 0; pointer-events: none; }
+  #welcome h1 {
+    font-family: 'Cormorant Garamond', Georgia, serif;
+    font-weight: 300; font-size: 48px; color: rgba(255,255,255,0.9);
+    letter-spacing: 0.08em; margin-bottom: 12px;
+  }
+  #welcome p {
+    font-family: 'Cormorant Garamond', Georgia, serif;
+    font-size: 14px; color: rgba(255,255,255,0.4); letter-spacing: 0.15em;
+    text-transform: uppercase; margin-bottom: 40px;
+  }
+  #welcome .instructions {
+    display: flex; gap: 40px; margin-bottom: 48px;
+  }
+  #welcome .instr-item {
+    text-align: center; color: rgba(255,255,255,0.5);
+    font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase;
+    font-family: 'Cormorant Garamond', Georgia, serif;
+  }
+  #welcome .instr-icon {
+    font-size: 28px; margin-bottom: 8px; display: block;
+    filter: grayscale(0.2);
+  }
+  #startBtn {
+    background: transparent; border: 1px solid rgba(255,255,255,0.35);
+    color: rgba(255,255,255,0.85); padding: 14px 48px; font-size: 12px;
+    letter-spacing: 0.2em; text-transform: uppercase; cursor: pointer;
+    border-radius: 4px; font-family: 'Cormorant Garamond', Georgia, serif;
+    transition: all 0.2s; backdrop-filter: blur(6px);
+  }
+  #startBtn:hover { background: rgba(255,255,255,0.12); border-color: rgba(255,255,255,0.6); }
+  #startBtn:active { transform: scale(0.97); }
 </style>
 </head>
 <body>
+
+<!-- Welcome Screen -->
+<div id="welcome">
+  <h1>Fog Screen</h1>
+  <p>Breath Mirror Experience</p>
+  <div class="instructions">
+    <div class="instr-item">
+      <span class="instr-icon">💨</span>
+      blow to fog
+    </div>
+    <div class="instr-item">
+      <span class="instr-icon">🤏</span>
+      pinch to draw
+    </div>
+    <div class="instr-item">
+      <span class="instr-icon">📷</span>
+      L-shape to capture
+    </div>
+  </div>
+  <button id="startBtn">Enter</button>
+</div>
+
+<!-- Main App -->
 <div id="container">
   <video id="video" autoplay playsinline muted></video>
   <canvas id="cameraCanvas"></canvas>
@@ -191,6 +273,7 @@ const countdownEl = document.getElementById('countdown');
 const photoStrip  = document.getElementById('photoStrip');
 const modeLabel   = document.getElementById('modeLabel');
 const sizeLabel   = document.getElementById('sizeLabel');
+const welcomeEl   = document.getElementById('welcome');
 
 const offscreen = document.createElement('canvas');
 const offCtx    = offscreen.getContext('2d');
@@ -209,7 +292,14 @@ const INK_COL  = '#0c0a09';
 const handState = [0, 1].map(() => ({
   smoothX: null, smoothY: null, trail: [], isDrawing: false
 }));
-const SMOOTH = 0.35;
+
+/* ── Welcome Screen ─────────────────────────────────────────────────── */
+document.getElementById('startBtn').addEventListener('click', () => {
+  welcomeEl.classList.add('hidden');
+  setTimeout(() => { welcomeEl.style.display = 'none'; }, 600);
+  startCamera();
+  startMic();
+});
 
 /* ── Resize ─────────────────────────────────────────────────────────── */
 function resize() {
@@ -447,7 +537,7 @@ function doCapture() {
     btn.addEventListener('click', e => {
       e.stopPropagation();
       const a = document.createElement('a');
-      a.href = url; a.download = `breath-mirror-${Date.now()}.png`; a.click();
+      a.href = url; a.download = `fogscreen-${Date.now()}.png`; a.click();
     });
     wrap.appendChild(img); wrap.appendChild(btn);
     photoStrip.appendChild(wrap);
@@ -625,8 +715,6 @@ window.addEventListener('keydown', e => {
 
 /* ── Boot ────────────────────────────────────────────────────────────── */
 updateCursor();
-startCamera();
-startMic();
 </script>
 </body>
 </html>
